@@ -1,0 +1,179 @@
+---
+title: "Statistical Triple Double"
+author: "Rob Weber"
+date: "March 14, 2019"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+c("tidyverse", 
+  "plotly") -> package_names  
+for(package_name in package_names) {
+  if(!is.element(package_name, installed.packages()[,1])) {
+     install.packages(package_name,
+                      repos = "http://cran.mtu.edu/")
+  }
+  library(package_name, character.only=TRUE,
+          quietly=TRUE,verbose=FALSE)
+}
+rm(list=c("package_name", "package_names"))
+
+setwd("F:/NBA Data/NBA_Box")
+load("4950to1718_IND_BOX.RData")
+```
+
+```{r Cleaning Up}
+df$PTS <- as.numeric(df$PTS)
+df$AST <- as.numeric(df$AST)
+df$TRB <- as.numeric(df$TRB)
+df_trim <- df %>%
+  filter(!is.na(PTS) & !is.na(AST) & !is.na(TRB)) %>%
+  select(Year, Month, Day, Player, PTS, AST, TRB)
+```
+
+```{r Testing, eval=FALSE}
+set.seed(32319)
+loops <- 10000
+cutoff_df <- data.frame("Percent" = 0, "PTS" = 0, "AST" = 0, "TRB" = 0)
+for(i in 1:loops) {
+  loop_players <- sample(c(1:length(df_trim$Year)), 10000)
+  loop_df <- df_trim[loop_players, ]
+  
+  data.frame("Percent" = c(1:10), 
+             "PTS" = c(quantile(loop_df$PTS, 0.99, na.rm = T), 
+                       quantile(loop_df$PTS, 0.98, na.rm = T), 
+                       quantile(loop_df$PTS, 0.97, na.rm = T), 
+                       quantile(loop_df$PTS, 0.96, na.rm = T), 
+                       quantile(loop_df$PTS, 0.95, na.rm = T), 
+                       quantile(loop_df$PTS, 0.94, na.rm = T), 
+                       quantile(loop_df$PTS, 0.93, na.rm = T), 
+                       quantile(loop_df$PTS, 0.92, na.rm = T), 
+                       quantile(loop_df$PTS, 0.91, na.rm = T), 
+                       quantile(loop_df$PTS, 0.90, na.rm = T)), 
+             "AST" = c(quantile(loop_df$AST, 0.99, na.rm = T), 
+                       quantile(loop_df$AST, 0.98, na.rm = T), 
+                       quantile(loop_df$AST, 0.97, na.rm = T), 
+                       quantile(loop_df$AST, 0.96, na.rm = T), 
+                       quantile(loop_df$AST, 0.95, na.rm = T), 
+                       quantile(loop_df$AST, 0.94, na.rm = T), 
+                       quantile(loop_df$AST, 0.93, na.rm = T), 
+                       quantile(loop_df$AST, 0.92, na.rm = T), 
+                       quantile(loop_df$AST, 0.91, na.rm = T), 
+                       quantile(loop_df$AST, 0.90, na.rm = T)), 
+             "TRB" = c(quantile(loop_df$TRB, 0.99, na.rm = T), 
+                       quantile(loop_df$TRB, 0.98, na.rm = T), 
+                       quantile(loop_df$TRB, 0.97, na.rm = T), 
+                       quantile(loop_df$TRB, 0.96, na.rm = T), 
+                       quantile(loop_df$TRB, 0.95, na.rm = T), 
+                       quantile(loop_df$TRB, 0.94, na.rm = T), 
+                       quantile(loop_df$TRB, 0.93, na.rm = T), 
+                       quantile(loop_df$TRB, 0.92, na.rm = T), 
+                       quantile(loop_df$TRB, 0.91, na.rm = T), 
+                       quantile(loop_df$TRB, 0.90, na.rm = T))) -> loop_df2
+  
+  cutoff_df <- rbind(cutoff_df, loop_df2)
+}
+cutoff_df <- cutoff_df[2:length(cutoff_df$Percent), ]
+save(cutoff_df, file = "boot.RData")
+```
+
+```{r}
+load("boot.RData")
+cutoff_df %>%
+  group_by(Percent) %>%
+  summarise(Unique_PTS = length(unique(PTS)), 
+            Unique_AST = length(unique(AST)), 
+            Unique_TRB = length(unique(TRB)))
+
+PTS_cutoff <- quantile(df_trim$PTS, 0.96, na.rm = T)[[1]]
+AST_cutoff <- quantile(df_trim$AST, 0.96, na.rm = T)[[1]]
+TRB_cutoff <- quantile(df_trim$TRB, 0.96, na.rm = T)[[1]]
+
+df_trim2 <- df_trim %>%
+  filter(PTS >= PTS_cutoff & AST >= AST_cutoff & TRB >= TRB_cutoff)
+rankings <- df_trim2 %>%
+  group_by(Player) %>%
+  summarise(TripleTop4s = length(Year)) %>%
+  arrange(desc(TripleTop4s))
+```
+
+```{r}
+plot_ly(type = "scatter3d", x = df_trim2$PTS, y = df_trim2$TRB, z = df_trim2$AST, color = df_trim2$Year, mode = "markers", 
+        text = paste("Date: ", df_trim2$Day, "-", df_trim2$Month, "-", df_trim2$Year, 
+                     "<br>Player: ", df_trim2$Player, 
+                     "<br>PTS: ", df_trim2$PTS, 
+                     "<br>AST: ", df_trim2$AST, 
+                     "<br>REB: ", df_trim2$TRB,
+                     sep = ""), 
+        hoverinfo = "text") %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = "Points"), 
+                      yaxis = list(title = "Rebounds"), 
+                      zaxis = list(title = "Assists")), 
+         annotations = list(text = "Year", 
+                            x = 1.13, 
+                            y = 1.05, 
+                            showarrow = F))
+```
+
+```{r}
+yearly_cutoffs <- df_trim %>%
+  group_by(Year) %>%
+  summarise(PTS_Cutoff = quantile(PTS, 0.96, na.rm = T), 
+            AST_Cutoff = quantile(AST, 0.96, na.rm = T), 
+            TRB_Cutoff = quantile(TRB, 0.96, na.rm = T), 
+            On_Top_PTS = length(unique(Player[PTS >= quantile(PTS, 0.75, na.rm = T)])) / length(unique(Player)), 
+            On_Top_AST = length(unique(Player[AST >= quantile(AST, 0.75, na.rm = T)])) / length(unique(Player)), 
+            On_Top_TRB = length(unique(Player[TRB >= quantile(TRB, 0.75, na.rm = T)])) / length(unique(Player)))
+yearly_cutoffs_nowilt <- df_trim %>%
+  filter(Player != "Wilt Chamberlain") %>%
+  group_by(Year) %>%
+  summarise(PTS_Cutoff = quantile(PTS, 0.96, na.rm = T), 
+            AST_Cutoff = quantile(AST, 0.96, na.rm = T), 
+            TRB_Cutoff = quantile(TRB, 0.96, na.rm = T), 
+            On_Top_PTS = length(unique(Player[PTS >= quantile(PTS, 0.75, na.rm = T)])) / length(unique(Player)), 
+            On_Top_AST = length(unique(Player[AST >= quantile(AST, 0.75, na.rm = T)])) / length(unique(Player)), 
+            On_Top_TRB = length(unique(Player[TRB >= quantile(TRB, 0.75, na.rm = T)])) / length(unique(Player)))
+
+
+
+tt4s <- 0
+for(i in 1:length(df_trim$Year)) {
+  if(df_trim$PTS[i] >= yearly_cutoffs_nowilt$PTS_Cutoff[df_trim$Year[i] == yearly_cutoffs_nowilt$Year] & 
+     df_trim$AST[i] >= yearly_cutoffs_nowilt$AST_Cutoff[df_trim$Year[i] == yearly_cutoffs_nowilt$Year] & 
+     df_trim$TRB[i] >= yearly_cutoffs_nowilt$TRB_Cutoff[df_trim$Year[i] == yearly_cutoffs_nowilt$Year]) {
+    tt4s <- c(tt4s, i)
+  }
+}
+
+df_trim3 <- df_trim[tt4s, ]
+rankings2 <- df_trim3 %>%
+  group_by(Player) %>%
+  summarise(TripleTop4s = length(Year)) %>%
+  arrange(desc(TripleTop4s))
+```
+
+```{r}
+plot_ly(type = "scatter3d", x = df_trim3$PTS, y = df_trim3$TRB, z = df_trim3$AST, color = df_trim3$Year, mode = "markers", 
+        text = paste("Date: ", df_trim3$Day, "-", df_trim3$Month, "-", df_trim3$Year, 
+                     "<br>Player: ", df_trim3$Player, 
+                     "<br>PTS: ", df_trim3$PTS, 
+                     "<br>AST: ", df_trim3$AST, 
+                     "<br>REB: ", df_trim3$TRB,
+                     sep = ""), 
+        hoverinfo = "text") %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = "Points"), 
+                      yaxis = list(title = "Rebounds"), 
+                      zaxis = list(title = "Assists")), 
+         annotations = list(text = "Year", 
+                            x = 1.13, 
+                            y = 1.05, 
+                            showarrow = F))
+```
+
