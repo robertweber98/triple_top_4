@@ -23,7 +23,6 @@ for(package_name in package_names) {
 }
 rm(list=c("package_name", "package_names"))
 
-setwd("F:/NBA Data/NBA_Box")
 load("4950to1718_IND_BOX.RData")
 ```
 
@@ -83,7 +82,7 @@ save(cutoff_df, file = "boot.RData")
 ```
 
 ```{r}
-load("boot.RData")
+load("boot.RData") # this file can be found in the repository
 cutoff_df %>%
   group_by(Percent) %>%
   summarise(Unique_PTS = length(unique(PTS)), 
